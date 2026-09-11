@@ -23,18 +23,20 @@ This is an npm-workspaces monorepo using TypeScript project references:
 
 ```
 packages/
-  core/        # domain logic only \u2014 no CLI/UI code, no concrete AI runtime
-  runtime/     # AgentRuntime abstraction + implementations (added in a later phase)
-  cli/         # `crewforge` CLI (added in a later phase)
-  templates/   # built-in agent + workflow reference templates
+  core/         # domain logic only — no CLI/UI code, no concrete AI runtime
+  runtime/      # AgentRuntime implementations: MockRuntime, CopilotRuntime
+  integrations/ # external-system adapters: MCPProvider (McpClientProvider)
+  cli/          # `crewforge` CLI — thin, calls into core/runtime/integrations
+  vscode/       # VS Code extension — thin, calls the same @crewforge/cli functions
+  templates/    # built-in agent + workflow reference templates
 tests/
   unit/        # fast, no I/O beyond temp dirs and fixtures
-  integration/ # end-to-end flows (added in a later phase)
+  integration/ # end-to-end flows
   fixtures/    # static fixture repos/configs used by tests
 ```
 
 `packages/core` must keep working standalone, with zero dependency on the CLI,
-a VS Code extension, or any concrete AI runtime. All external systems (Git, MCP,
+the VS Code extension, or any concrete AI runtime. All external systems (Git, MCP,
 AI runtimes) are accessed through interfaces defined in `packages/core`.
 
 ## Scripts

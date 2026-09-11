@@ -22,6 +22,22 @@ npm run test:watch        # vitest in watch mode
 Run `npm run build && npm run lint && npm run format:check && npm test && npm run test:integration`
 (what CI runs) before opening a PR.
 
+## Running the VS Code extension
+
+`packages/vscode` isn't published — run it straight from this repo:
+
+```bash
+npm run build   # compile @crewforge/core/runtime/cli/vscode first
+```
+
+Then open `packages/vscode` as a folder in VS Code and press `F5` (or use the
+"Run Extension" launch config if one is present) to open an Extension
+Development Host with CrewForge loaded. Open a different folder (one with its
+own `.crewforge/`, created via `crewforge init`) inside that host window to see
+the Team/Tasks/Changed Files/Decisions views populate. It prefers a real Copilot
+model via `vscode.lm` when Copilot Chat is installed and signed in, falling back
+to `MockRuntime` otherwise.
+
 ## How the monorepo fits together
 
 - **npm workspaces** (`packages/*`) hoist shared dependencies to the root

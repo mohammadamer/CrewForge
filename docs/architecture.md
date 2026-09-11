@@ -216,3 +216,55 @@ team.yaml: mcp.servers  -->  McpClientProvider.connect()  -->  per-server stdio
   `InMemoryTransport` to talk to a real in-process `McpServer` — so the tests
   prove the adapter speaks the actual MCP protocol without needing a real
   subprocess or network access in CI.
+
+## VS Code extension
+
+`packages/vscode` is a thin UI client, same rule as `packages/cli`: it holds no
+orchestration logic of its own. Every command it registers calls straight into
+`@crewforge/cli`'s command functions (`runRun`, `approveRun`, `runStatus`,
+`runTeam`, `runAgents`, `runHistory`, `runDecisions`) — the exact same functions
+the terminal CLI calls. This is possible because those functions were designed
+from Phase 4 onward as plain, console-I/O-free functions returning structured
+data (see [docs/development.md](development.md)); the CLI and the extension are
+just two renderers on top of one shared command layer, not two implementations
+of "how a run executes."
+
+```
+CrewForge (activity bar)
+  Team            <- TeamTreeProvider          (runTeam + runAgents)
+  Tasks           <- TaskTreeProvider           (runStatus)
+  Changed Files   <- ChangedFilesTreeProvider   (runHistory, latest session)
+  Decisions       <- DecisionsTreeProvider      (runDecisions)
+```
+
+- **Views**: four `vscode.TreeDataProvider`s (`packages/vscode/src/providers/`),
+  all built on a small shared `ListTreeProvider` base (flat list, `refresh()`
+  re-runs `load()`). This is a deliberately smaller slice of build.md's full
+  mockup (which also calls for a task graph diagram, live agent activity, a git
+  diff view, verification status, and approval-request UI) — those are natural
+  follow-ups on top of the same pattern once there's a live event stream to
+  render against, rather than a snapshot-per-refresh.
+- **Commands**: `crewforge.run` (input box for the request, `withProgress` while
+  it executes, streams `AgentEvent`s to an output channel, then either
+  auto-approves or asks via `showInformationMessage` depending on
+  `workflow.human_approval` — the same approval semantics as the CLI's prompt);
+  `crewforge.approveLatestRun`; `crewforge.refresh`.
+- **`VsCodeLmRuntime`** (`packages/vscode/src/runtime/vscode-lm-runtime.ts`) is
+  the real Copilot-backed `AgentRuntime` that `CopilotRuntime`'s doc comment
+  always pointed to: `vscode.lm.selectChatModels()` +
+  `model.sendRequest()`, only possible inside an extension host. It shares
+  `renderAgentPrompt()` with `CopilotRuntime` (`@crewforge/runtime`) so both
+  adapters build the exact same prompt from an `AgentContext`. The extension
+  prefers it automatically and falls back to `MockRuntime` when no Copilot model
+  is available (Copilot Chat not installed/signed in).
+- **Testing without an Extension Host**: `vscode` only exists inside a real VS
+  Code process, so `tests/mocks/vscode.ts` provides a minimal hand-rolled stand-in
+  (`TreeItem`, `EventEmitter`, `lm.selectChatModels`, ...) aliased in
+  `vitest.config.ts`. This lets `tests/unit/vscode/*.test.ts` exercise the real
+  provider and runtime logic — including a fixture-backed run through `runInit`
+  — without launching VS Code itself.
+- **Running it today**: not published to the Marketplace. From a clone of this
+  repo, open `packages/vscode` in VS Code and press `F5` (or
+  `code --extensionDevelopmentPath=packages/vscode <some-other-project>`) to
+  launch an Extension Development Host with it loaded — see
+  [docs/development.md](development.md).
