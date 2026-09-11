@@ -21,7 +21,7 @@ export interface VerificationSummary {
   results: VerificationCommandResult[];
 }
 
-/** Runs the repository's configured verification commands (test/lint/build). Implemented in Phase 5. */
+/** Runs the repository's configured verification commands (test/lint/build). See `CommandVerificationRunner`. */
 export interface VerificationRunner {
   run(config: VerificationCommandConfig): Promise<VerificationSummary>;
 }

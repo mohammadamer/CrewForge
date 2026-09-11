@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+/** YAML represents an empty mapping key (e.g. `verification:` with nothing under it) as `null`,
+ *  not "missing" — without this, `.default(...)` would never kick in for that common case. */
+const nullToUndefined = (value: unknown) => (value === null ? undefined : value);
+
 export const permissionPolicySchema = z.object({
   shell: z.enum(['none', 'restricted', 'full']).default('restricted'),
   network: z.enum(['none', 'restricted', 'full']).default('restricted'),
@@ -28,20 +32,26 @@ export const teamConfigSchema = z.object({
   name: z.string().min(1),
   lead: z.string().min(1).default('lead'),
   agents: z.array(z.string()).min(1),
-  workflow: workflowTogglesSchema.default({
-    planning: true,
-    parallel_execution: true,
-    verification: true,
-    human_approval: true,
-  }),
-  verification: verificationConfigSchema.default({}),
-  permissions: permissionPolicySchema.default({
-    shell: 'restricted',
-    network: 'restricted',
-    filesystem: 'repository',
-    deployment: 'approval-required',
-  }),
-  mcp: mcpConfigSchema.optional(),
+  workflow: z.preprocess(
+    nullToUndefined,
+    workflowTogglesSchema.default({
+      planning: true,
+      parallel_execution: true,
+      verification: true,
+      human_approval: true,
+    }),
+  ),
+  verification: z.preprocess(nullToUndefined, verificationConfigSchema.default({})),
+  permissions: z.preprocess(
+    nullToUndefined,
+    permissionPolicySchema.default({
+      shell: 'restricted',
+      network: 'restricted',
+      filesystem: 'repository',
+      deployment: 'approval-required',
+    }),
+  ),
+  mcp: z.preprocess(nullToUndefined, mcpConfigSchema.optional()),
 });
 
 export type TeamConfig = z.infer<typeof teamConfigSchema>;

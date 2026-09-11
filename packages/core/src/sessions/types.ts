@@ -1,3 +1,6 @@
+import type { ResolvedConflict } from '../orchestration/run-orchestrator.js';
+import type { VerificationSummary } from '../verification/types.js';
+
 export interface SessionSummary {
   runId: string;
   request: string;
@@ -11,4 +14,6 @@ export interface SessionSummary {
   tasksCompleted: number;
   tasksFailed: number;
   tasksNeedsReview: number;
+  conflicts: ResolvedConflict[];
+  verification?: VerificationSummary;
 }

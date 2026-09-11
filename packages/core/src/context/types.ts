@@ -47,6 +47,6 @@ export interface AgentContext {
   relevantKnowledge: KnowledgeExcerpt[];
   priorDecisions: DecisionExcerpt[];
   dependentResults: DependentTaskResult[];
-  /** Populated once `GitProvider` lands (Phase 5); absent until then. */
+  /** Populated by `RuntimeAgentExecutor` from `GitProvider.diff()` when one is configured. */
   relevantDiff?: string;
 }

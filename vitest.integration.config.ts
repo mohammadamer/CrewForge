@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@crewforge/core': src('./packages/core/src/index.ts'),
       '@crewforge/runtime': src('./packages/runtime/src/index.ts'),
+      '@crewforge/cli': src('./packages/cli/src/index.ts'),
     },
   },
   test: {

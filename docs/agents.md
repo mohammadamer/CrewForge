@@ -1,8 +1,8 @@
 # Built-in agents
 
 CrewForge ships Markdown templates for eight engineering roles in
-`packages/templates/agents/`. `crewforge init` (added in a later phase) activates
-a subset by default; the rest are available on request.
+`packages/templates/agents/`. `crewforge init` activates a subset by default; the
+rest are available on request via `crewforge agents create <role>`.
 
 | Role            | Activated by default | Responsibilities (summary)                                     |
 | --------------- | :------------------: | -------------------------------------------------------------- |
@@ -40,5 +40,6 @@ free-form instructions used as that agent's system prompt. See
 ## Custom agents
 
 You can add your own role by creating `.crewforge/agents/<role>.md` following the
-same schema, and adding `<role>` to `team.yaml`'s `agents` list. A `crewforge agent
-create <role>` command that scaffolds this for you is planned for the CLI phase.
+same schema, and adding `<role>` to `team.yaml`'s `agents` list — or run
+`crewforge agents create <role>` to scaffold it from a built-in template (or a
+blank one, if the role has no template).

@@ -3,10 +3,14 @@ import type { ContextBuilder } from '../context/context-builder.js';
 import type { DependentTaskResult, RepositorySummary } from '../context/types.js';
 import { createAgentEvent } from '../events/factory.js';
 import type { EventBus } from '../events/event-bus.js';
+import type { GitProvider } from '../git/types.js';
 import type { MemoryStore } from '../memory/memory-store.js';
 import type { TaskGraph } from '../tasks/task-graph.js';
 import type { Task, TaskResult } from '../tasks/types.js';
 import type { AgentExecutor } from './agent-executor.js';
+
+/** Diffs beyond this size are truncated before being sent to an agent as context. */
+const MAX_DIFF_CHARS = 4000;
 
 export interface RuntimeAgentExecutorOptions {
   runtime: AgentRuntime;
@@ -16,6 +20,8 @@ export interface RuntimeAgentExecutorOptions {
   request: string;
   eventBus?: EventBus;
   memoryStore?: MemoryStore;
+  /** When provided, the current working-tree diff is included in each task's context. */
+  gitProvider?: GitProvider;
 }
 
 /**
@@ -41,6 +47,7 @@ export class RuntimeAgentExecutor implements AgentExecutor {
     const context = await contextBuilder.build(task, agent, repository, {
       request,
       dependentResults: this.collectDependentResults(task, graph),
+      relevantDiff: await this.fetchRelevantDiff(),
     });
 
     try {
@@ -91,5 +98,19 @@ export class RuntimeAgentExecutor implements AgentExecutor {
       .map((depId) => graph.getTask(depId))
       .filter((dep): dep is Task & { result: TaskResult } => dep.result !== undefined)
       .map((dep) => ({ taskId: dep.id, summary: dep.result.summary }));
+  }
+
+  /** Best-effort: a missing/non-repo `GitProvider` should never fail agent execution. */
+  private async fetchRelevantDiff(): Promise<string | undefined> {
+    if (!this.options.gitProvider) return undefined;
+    try {
+      const { patch } = await this.options.gitProvider.diff();
+      if (!patch) return undefined;
+      return patch.length > MAX_DIFF_CHARS
+        ? `${patch.slice(0, MAX_DIFF_CHARS)}\n… (truncated)`
+        : patch;
+    } catch {
+      return undefined;
+    }
   }
 }

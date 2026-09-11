@@ -14,7 +14,7 @@ export interface GitDiffResult {
   patch: string;
 }
 
-/** Abstraction over Git so orchestration never shells out directly. Implemented in Phase 5. */
+/** Abstraction over Git so orchestration never shells out directly. See `LocalGitProvider`. */
 export interface GitProvider {
   status(): Promise<GitStatus>;
   diff(paths?: string[]): Promise<GitDiffResult>;

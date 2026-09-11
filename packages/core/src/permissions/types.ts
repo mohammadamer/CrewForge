@@ -33,7 +33,8 @@ export type PermissionActionKind =
   | 'git-merge'
   | 'db-migration'
   | 'security-config-change'
-  | 'credential-write';
+  | 'credential-write'
+  | 'conflict-resolution';
 
 export interface PermissionAction {
   kind: PermissionActionKind;

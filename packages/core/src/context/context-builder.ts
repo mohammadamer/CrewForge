@@ -15,6 +15,8 @@ export interface ContextBuildOptions {
   request: string;
   dependentResults?: DependentTaskResult[];
   priorDecisions?: DecisionExcerpt[];
+  /** Pre-fetched via `GitProvider`; this builder never talks to Git directly. */
+  relevantDiff?: string;
 }
 
 export interface ContextBuilder {
@@ -49,6 +51,7 @@ export class DefaultContextBuilder implements ContextBuilder {
       relevantKnowledge: await this.loadKnowledge(agent),
       priorDecisions: options.priorDecisions ?? [],
       dependentResults: options.dependentResults ?? [],
+      relevantDiff: options.relevantDiff,
     };
   }
 

@@ -9,7 +9,9 @@ const ALLOWED_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   ready: ['running', 'blocked'],
   running: ['completed', 'failed', 'needs-review', 'blocked'],
   blocked: ['pending', 'ready'],
-  completed: ['approved'],
+  // A task can be demoted back to needs-review after the fact by conflict detection
+  // or a failed verification run, even though it already finished successfully.
+  completed: ['approved', 'needs-review'],
   failed: ['needs-review', 'ready'],
   'needs-review': ['approved', 'ready', 'failed'],
   approved: [],

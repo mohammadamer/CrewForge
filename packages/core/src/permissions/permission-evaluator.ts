@@ -9,6 +9,7 @@ const ALWAYS_REQUIRES_APPROVAL: ReadonlySet<PermissionAction['kind']> = new Set(
   'db-migration',
   'security-config-change',
   'credential-write',
+  'conflict-resolution',
 ]);
 
 /** Evaluates a single agent action against a `PermissionPolicy`. Never grants unlimited access. */
