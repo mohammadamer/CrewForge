@@ -199,6 +199,7 @@ workflow:
   parallel_execution: true
   verification: true
   human_approval: true
+  worktrees: false # opt-in: isolate each parallel task in its own git worktree
 
 verification:
   test: npm test
@@ -228,10 +229,11 @@ The MVP described in build.md is implemented and tested end to end:
 - ✅ Full CLI (`init`, `run`, `ask`, `task`, `status`, `decisions`, `history`,
   `agents`, `doctor`)
 - ✅ Real Git integration, verification runner, conflict detection, human approval
+- ✅ Opt-in git worktree isolation for parallel tasks (`workflow.worktrees`), with
+  real merge-conflict detection alongside the self-reported-file-list check
 
-Not yet built (see build.md's later phases): Git worktree-isolated parallel
-execution, MCP support, a generic declarative workflow engine, and the VS Code
-extension.
+Not yet built (see build.md's later phases): MCP support, a generic declarative
+workflow engine, and the VS Code extension.
 
 ## Documentation
 

@@ -12,9 +12,12 @@ import {
   LocalGitProvider,
   loadTeamConfig,
   MemoryStore,
+  pathExists,
   RuntimeAgentExecutor,
   SessionStore,
   TaskStore,
+  ValidationError,
+  WorktreeCoordinator,
 } from '@crewforge/core';
 import type {
   AgentDefinition,
@@ -27,6 +30,7 @@ import type {
   SessionSummary,
   Task,
 } from '@crewforge/core';
+import { join } from 'node:path';
 import { agentsDirFor, crewforgeDirFor } from '../paths.js';
 
 export interface RunOptions {
@@ -58,6 +62,7 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
   const contextBuilder = new DefaultContextBuilder();
   const memoryStore = new MemoryStore({ crewforgeDir });
   const gitProvider = new LocalGitProvider({ cwd: options.cwd });
+  const createGitProviderForCwd = (cwd: string) => new LocalGitProvider({ cwd });
 
   const executor = new RuntimeAgentExecutor({
     runtime: options.runtime,
@@ -67,7 +72,22 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
     eventBus,
     memoryStore,
     gitProvider,
+    createGitProviderForCwd,
   });
+
+  const worktrees = teamConfig.workflow.worktrees
+    ? new WorktreeCoordinator({
+        gitProvider,
+        createGitProvider: createGitProviderForCwd,
+        worktreesDir: join(crewforgeDir, 'worktrees'),
+      })
+    : undefined;
+
+  if (teamConfig.workflow.worktrees && !(await pathExists(join(options.cwd, '.git')))) {
+    throw new ValidationError(
+      'workflow.worktrees is enabled but this is not a git repository — run `git init` first or set workflow.worktrees: false in team.yaml.',
+    );
+  }
 
   const planner = registry.has(teamConfig.lead)
     ? new AiTaskPlanner({
@@ -85,6 +105,7 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
     registry,
     planner,
     executor,
+    worktrees,
     verification: {
       enabled: teamConfig.workflow.verification,
       config: teamConfig.verification,
@@ -202,6 +223,7 @@ function buildSessionSummary(
     tasksFailed: tasks.filter((task) => task.status === 'failed').length,
     tasksNeedsReview: tasks.filter((task) => task.status === 'needs-review').length,
     conflicts: summary.conflicts,
+    worktreeConflicts: summary.worktreeConflicts,
     verification: summary.verification,
   };
 }

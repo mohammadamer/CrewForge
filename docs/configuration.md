@@ -22,6 +22,7 @@ workflow:
   parallel_execution: true
   verification: true
   human_approval: true
+  worktrees: false
 
 verification:
   test: npm test
@@ -38,21 +39,22 @@ mcp:
   servers: []
 ```
 
-| Field                          | Type                                            | Default               | Notes                                                                   |
-| ------------------------------ | ----------------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `name`                         | `string`                                        | required              | Human-readable name for this team.                                      |
-| `lead`                         | `string`                                        | `"lead"`              | Role id of the agent that acts as Lead.                                 |
-| `agents`                       | `string[]`                                      | required, min 1       | Roles active for this project (must have a matching `agents/*.md`).     |
-| `workflow.planning`            | `boolean`                                       | `true`                | Whether the Lead plans before delegating.                               |
-| `workflow.parallel_execution`  | `boolean`                                       | `true`                | Whether independent tasks may run concurrently.                         |
-| `workflow.verification`        | `boolean`                                       | `true`                | Whether QA verification runs before final approval.                     |
-| `workflow.human_approval`      | `boolean`                                       | `true`                | Whether a final human approval gate is required.                        |
-| `verification.test/lint/build` | `string`                                        | none                  | Shell commands run by `CommandVerificationRunner` after implementation. |
-| `permissions.shell`            | `"none" \| "restricted" \| "full"`              | `"restricted"`        | Team-wide default; agents may narrow via their own frontmatter.         |
-| `permissions.network`          | `"none" \| "restricted" \| "full"`              | `"restricted"`        |                                                                         |
-| `permissions.filesystem`       | `"repository" \| "readonly"`                    | `"repository"`        |                                                                         |
-| `permissions.deployment`       | `"blocked" \| "approval-required" \| "allowed"` | `"approval-required"` |                                                                         |
-| `mcp.servers`                  | `string[]`                                      | `[]`                  | Named MCP servers to make available to agents (later phase).            |
+| Field                          | Type                                            | Default               | Notes                                                                                                                                                                                            |
+| ------------------------------ | ----------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                         | `string`                                        | required              | Human-readable name for this team.                                                                                                                                                               |
+| `lead`                         | `string`                                        | `"lead"`              | Role id of the agent that acts as Lead.                                                                                                                                                          |
+| `agents`                       | `string[]`                                      | required, min 1       | Roles active for this project (must have a matching `agents/*.md`).                                                                                                                              |
+| `workflow.planning`            | `boolean`                                       | `true`                | Whether the Lead plans before delegating.                                                                                                                                                        |
+| `workflow.parallel_execution`  | `boolean`                                       | `true`                | Whether independent tasks may run concurrently.                                                                                                                                                  |
+| `workflow.verification`        | `boolean`                                       | `true`                | Whether QA verification runs before final approval.                                                                                                                                              |
+| `workflow.human_approval`      | `boolean`                                       | `true`                | Whether a final human approval gate is required.                                                                                                                                                 |
+| `workflow.worktrees`           | `boolean`                                       | `false`               | Opt-in: run each parallel task in its own isolated git worktree, merged back after; requires a git repository. See [architecture.md](architecture.md#parallel-execution-and-worktree-isolation). |
+| `verification.test/lint/build` | `string`                                        | none                  | Shell commands run by `CommandVerificationRunner` after implementation.                                                                                                                          |
+| `permissions.shell`            | `"none" \| "restricted" \| "full"`              | `"restricted"`        | Team-wide default; agents may narrow via their own frontmatter.                                                                                                                                  |
+| `permissions.network`          | `"none" \| "restricted" \| "full"`              | `"restricted"`        |                                                                                                                                                                                                  |
+| `permissions.filesystem`       | `"repository" \| "readonly"`                    | `"repository"`        |                                                                                                                                                                                                  |
+| `permissions.deployment`       | `"blocked" \| "approval-required" \| "allowed"` | `"approval-required"` |                                                                                                                                                                                                  |
+| `mcp.servers`                  | `string[]`                                      | `[]`                  | Named MCP servers to make available to agents (later phase).                                                                                                                                     |
 
 Validated by `teamConfigSchema` in `packages/core/src/config/team-config-schema.ts`.
 

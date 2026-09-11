@@ -49,4 +49,6 @@ export interface AgentContext {
   dependentResults: DependentTaskResult[];
   /** Populated by `RuntimeAgentExecutor` from `GitProvider.diff()` when one is configured. */
   relevantDiff?: string;
+  /** Set when the task runs in an isolated git worktree rather than the main working tree. */
+  workingDirectory?: string;
 }

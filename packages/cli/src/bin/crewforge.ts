@@ -212,6 +212,14 @@ program
       }
     }
 
+    if (outcome.summary.worktreeConflicts.length > 0) {
+      console.log('');
+      console.log(chalk.bold.yellow('Worktree merge conflicts — human review required:'));
+      for (const conflict of outcome.summary.worktreeConflicts) {
+        console.log(`  ${chalk.yellow('⚠')} task ${conflict.taskId} (branch: ${conflict.branch})`);
+      }
+    }
+
     console.log('');
     console.log(
       `${chalk.bold(outcome.sessionSummary.tasksCompleted)} completed, ` +

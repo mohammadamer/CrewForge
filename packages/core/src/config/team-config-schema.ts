@@ -16,6 +16,8 @@ export const workflowTogglesSchema = z.object({
   parallel_execution: z.boolean().default(true),
   verification: z.boolean().default(true),
   human_approval: z.boolean().default(true),
+  /** Opt-in: run each parallel task in its own isolated git worktree. See docs/architecture.md. */
+  worktrees: z.boolean().default(false),
 });
 
 export const verificationConfigSchema = z.object({
@@ -39,6 +41,7 @@ export const teamConfigSchema = z.object({
       parallel_execution: true,
       verification: true,
       human_approval: true,
+      worktrees: false,
     }),
   ),
   verification: z.preprocess(nullToUndefined, verificationConfigSchema.default({})),

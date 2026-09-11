@@ -17,6 +17,7 @@ describe('loadTeamConfig', () => {
       parallel_execution: true,
       verification: true,
       human_approval: true,
+      worktrees: false,
     });
     expect(config.verification).toEqual({
       test: 'npm test',

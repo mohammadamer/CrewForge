@@ -1,4 +1,5 @@
 import type { ResolvedConflict } from '../orchestration/run-orchestrator.js';
+import type { WorktreeConflict } from '../orchestration/lead-agent.js';
 import type { VerificationSummary } from '../verification/types.js';
 
 export interface SessionSummary {
@@ -15,5 +16,6 @@ export interface SessionSummary {
   tasksFailed: number;
   tasksNeedsReview: number;
   conflicts: ResolvedConflict[];
+  worktreeConflicts: WorktreeConflict[];
   verification?: VerificationSummary;
 }

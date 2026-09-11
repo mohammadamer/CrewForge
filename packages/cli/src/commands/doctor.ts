@@ -44,8 +44,19 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
 
   if (initialized) {
     try {
-      await loadTeamConfig(crewforgeDir);
+      const teamConfig = await loadTeamConfig(crewforgeDir);
       checks.push({ name: 'team.yaml valid', passed: true, detail: 'schema OK' });
+
+      if (teamConfig.workflow.worktrees) {
+        const isGitRepo = await pathExists(join(cwd, '.git'));
+        checks.push({
+          name: 'git repository (required by workflow.worktrees)',
+          passed: isGitRepo,
+          detail: isGitRepo
+            ? 'found'
+            : 'not a git repository — run `git init` or disable workflow.worktrees',
+        });
+      }
     } catch (error) {
       checks.push({
         name: 'team.yaml valid',

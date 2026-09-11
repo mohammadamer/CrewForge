@@ -17,6 +17,8 @@ export interface ContextBuildOptions {
   priorDecisions?: DecisionExcerpt[];
   /** Pre-fetched via `GitProvider`; this builder never talks to Git directly. */
   relevantDiff?: string;
+  /** Set when the task is running in an isolated git worktree. */
+  workingDirectory?: string;
 }
 
 export interface ContextBuilder {
@@ -52,6 +54,7 @@ export class DefaultContextBuilder implements ContextBuilder {
       priorDecisions: options.priorDecisions ?? [],
       dependentResults: options.dependentResults ?? [],
       relevantDiff: options.relevantDiff,
+      workingDirectory: options.workingDirectory,
     };
   }
 

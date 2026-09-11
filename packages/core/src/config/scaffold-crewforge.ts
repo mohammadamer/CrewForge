@@ -88,6 +88,7 @@ function buildTeamConfigInput(
       parallel_execution: true,
       verification: true,
       human_approval: true,
+      worktrees: false,
     },
     verification: {
       ...(repository.hasTests ? { test: 'npm test' } : {}),

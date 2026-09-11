@@ -47,7 +47,9 @@ flowchart TD
    ready tasks and runs each ready batch concurrently (bounded), advancing the
    graph as results come back — this is where "backend and frontend run in
    parallel, but integration/QA wait" comes from, without any task needing to know
-   about scheduling itself.
+   about scheduling itself. When `workflow.worktrees` is enabled, `LeadAgent` also
+   gives each task its own isolated git worktree for this step — see
+   [Parallel execution and worktree isolation](#parallel-execution-and-worktree-isolation).
 4. **`AgentExecutor`** (`core/orchestration/runtime-agent-executor.ts`) is called
    once per task. It builds that task's `AgentContext` via `ContextBuilder`
    (knowledge files, dependent-task results, prior decisions, and — when a
@@ -118,3 +120,53 @@ specifies) and provides the two adapters:
 Keeping the interface in `core` means core never depends on `packages/runtime` (no
 import cycle), and a future runtime package can implement the same interface
 without core changing at all.
+
+## Parallel execution and worktree isolation
+
+By default, parallel tasks (e.g. backend and frontend running at the same time)
+all execute against the same working tree. `AgentExecutor` implementations today
+never actually write files to disk themselves — `filesChanged` is self-reported by
+the agent/runtime — so this is safe, and `ConflictDetector` (above) catches
+overlapping self-reported file lists after the fact.
+
+Setting `workflow.worktrees: true` in `team.yaml` turns on real, git-level
+isolation for the future where agents _do_ write files directly, and is fully
+functional today:
+
+```mermaid
+flowchart LR
+    P[LeadAgent.runTask] --> W1[WorktreeCoordinator.prepare]
+    W1 -->|git worktree add\n.crewforge/worktrees/task-&lt;id&gt;| X[AgentExecutor.execute\ncwd = worktree path]
+    X --> W2[WorktreeCoordinator.finalize]
+    W2 -->|commit if dirty, then\ngit merge task branch| M{merge result}
+    M -->|clean| C[task: completed]
+    M -->|conflict: git merge --abort| R[task: needs-review]
+```
+
+- **`WorktreeCoordinator`** (`core/git/worktree-coordinator.ts`) is the component
+  `LeadAgent` delegates to when `worktrees` is configured. `prepare(taskId)` runs
+  `git worktree add -b crewforge/task-<id> .crewforge/worktrees/task-<id>` from the
+  main repo and hands the task's `AgentExecutor.execute()` call a `cwd` scoped to
+  that directory (surfaced to agents as `AgentContext.workingDirectory`, and used
+  to scope that task's own relevant-diff lookup). `finalize()` commits anything
+  left in the worktree, merges its branch back into the main checkout, and always
+  removes the worktree afterward — even on a conflict.
+- **Real conflicts, not just self-reported ones**: if the merge fails,
+  `LocalGitProvider.merge()` runs `git merge --abort` (never leaves a repo in a
+  conflicted state) and reports `conflicted: true`. `LeadAgent` demotes that task
+  to `needs-review` and records a `WorktreeConflict { taskId, branch, output }` on
+  the run summary — a second, git-grounded conflict signal alongside
+  `ConflictDetector`'s self-reported-file-list heuristic.
+- **Serialized merges, parallel execution**: `git worktree add`/`merge` mutate
+  the _shared_ repository (refs, index, worktree metadata), so concurrent calls
+  from two tasks racing to merge at once could corrupt or lock each other out.
+  `WorktreeCoordinator` serializes `prepare()`/`finalize()` through an internal
+  FIFO queue — but a task's actual `AgentExecutor.execute()` call, which happens
+  _between_ those two calls, still runs fully in parallel with other tasks. Only
+  the quick "join the shared repo" moments are serialized.
+- **Requires a real git repository**: `crewforge run` checks for `.git` up front
+  and raises a clear `ValidationError` if `workflow.worktrees` is enabled outside
+  one, rather than letting `git worktree add` fail with a raw stderr dump.
+- `createWorktree()`/`removeWorktree()`/`merge()` are plain `GitProvider` methods
+  (`core/git/git-provider.ts`), so any future `GitProvider` implementation gets
+  worktree isolation for free by implementing the same three methods.
