@@ -235,9 +235,14 @@ The MVP described in build.md is implemented and tested end to end:
   `McpClientProvider`, tools surfaced to agents as `AgentContext.availableTools`;
   see [docs/architecture.md](docs/architecture.md#mcp-model-context-protocol-support)
   for what's not wired up yet)
+- ✅ VS Code extension (`packages/vscode`, not yet published — run it from source,
+  see [docs/development.md](docs/development.md#running-the-vs-code-extension)):
+  Team/Tasks/Changed Files/Decisions views, a `vscode.lm`-backed real Copilot
+  runtime, all built on the same `@crewforge/cli` command functions the terminal
+  CLI uses
 
 Not yet built (see build.md's later phases): a generic declarative workflow
-engine and the VS Code extension.
+engine.
 
 ## Documentation
 

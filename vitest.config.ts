@@ -12,6 +12,8 @@ export default defineConfig({
       '@crewforge/runtime': src('./packages/runtime/src/index.ts'),
       '@crewforge/integrations': src('./packages/integrations/src/index.ts'),
       '@crewforge/cli': src('./packages/cli/src/index.ts'),
+      '@crewforge/vscode': src('./packages/vscode/src/index.ts'),
+      vscode: src('./tests/mocks/vscode.ts'),
     },
   },
   test: {

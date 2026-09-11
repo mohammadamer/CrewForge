@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentRequest, AgentResult, AgentRuntime } from '@crewforge/core';
 import { createAgentEvent } from '@crewforge/core';
+import { renderAgentPrompt } from '../prompt.js';
 
 export interface CopilotRuntimeOptions {
   baseUrl?: string;
@@ -54,7 +55,7 @@ export class CopilotRuntime implements AgentRuntime {
   async run(request: AgentRequest): Promise<AgentResult> {
     const messages: ChatMessage[] = [
       { role: 'system', content: request.systemPrompt },
-      { role: 'user', content: renderUserPrompt(request) },
+      { role: 'user', content: renderAgentPrompt(request) },
     ];
 
     const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
@@ -94,40 +95,4 @@ export class CopilotRuntime implements AgentRuntime {
       });
     }
   }
-}
-
-function renderUserPrompt(request: AgentRequest): string {
-  const { context } = request;
-  const lines = [
-    `Request: ${context.request}`,
-    `Task: ${context.task.title}`,
-    context.task.description,
-  ];
-
-  if (context.relevantKnowledge.length > 0) {
-    lines.push('', 'Knowledge:');
-    for (const entry of context.relevantKnowledge) {
-      lines.push(`--- ${entry.path} ---`, entry.content);
-    }
-  }
-
-  if (context.dependentResults.length > 0) {
-    lines.push('', 'Dependent task results:');
-    for (const dep of context.dependentResults) {
-      lines.push(`- ${dep.taskId}: ${dep.summary}`);
-    }
-  }
-
-  if (context.relevantDiff) {
-    lines.push('', 'Relevant diff:', context.relevantDiff);
-  }
-
-  if (context.availableTools && context.availableTools.length > 0) {
-    lines.push('', 'Available MCP tools:');
-    for (const tool of context.availableTools) {
-      lines.push(`- ${tool.server}/${tool.name}${tool.description ? `: ${tool.description}` : ''}`);
-    }
-  }
-
-  return lines.join('\n');
 }

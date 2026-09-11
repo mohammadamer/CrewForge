@@ -1,0 +1,94 @@
+{
+  "name": "crewforge-vscode",
+  "displayName": "CrewForge",
+  "description": "A repo-native AI engineering team, inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "crewforge",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:crewforgeTeam"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "crewforge",
+          "title": "CrewForge",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "crewforge": [
+        {
+          "id": "crewforgeTeam",
+          "name": "Team"
+        },
+        {
+          "id": "crewforgeTasks",
+          "name": "Tasks"
+        },
+        {
+          "id": "crewforgeChangedFiles",
+          "name": "Changed Files"
+        },
+        {
+          "id": "crewforgeDecisions",
+          "name": "Decisions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "crewforge.run",
+        "title": "CrewForge: Run a Request",
+        "icon": "$(play)"
+      },
+      {
+        "command": "crewforge.refresh",
+        "title": "CrewForge: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "crewforge.approveLatestRun",
+        "title": "CrewForge: Approve Latest Run"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "crewforge.run",
+          "when": "view == crewforgeTasks",
+          "group": "navigation"
+        },
+        {
+          "command": "crewforge.refresh",
+          "when": "view == crewforgeTasks",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@crewforge/cli": "^0.1.0",
+    "@crewforge/core": "^0.1.0",
+    "@crewforge/runtime": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/vscode": "^1.90.0"
+  }
+}
