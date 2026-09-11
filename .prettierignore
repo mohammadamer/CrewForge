@@ -1,0 +1,7 @@
+dist
+coverage
+node_modules
+*.tsbuildinfo
+package-lock.json
+.github/build.md
+.github/copilot-instructions.md

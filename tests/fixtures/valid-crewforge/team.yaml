@@ -1,0 +1,21 @@
+name: demo-team
+lead: lead
+agents:
+  - lead
+  - backend
+  - frontend
+  - qa
+workflow:
+  planning: true
+  parallel_execution: true
+  verification: true
+  human_approval: true
+verification:
+  test: npm test
+  lint: npm run lint
+  build: npm run build
+permissions:
+  shell: restricted
+  network: restricted
+  filesystem: repository
+  deployment: approval-required
