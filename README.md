@@ -115,9 +115,16 @@ Running CrewForge against a project gives you:
   approval.
 - **A human approval gate on every run** — nothing is final until you approve
   it; you can also reject, retry, or ask for changes.
+- **Opt-in git worktree isolation** — run each parallel task in its own git
+  worktree and merge it back, with real git-level merge-conflict detection on
+  top of the self-reported-file-list check.
+- **MCP tool access** — connect agents to Model Context Protocol servers
+  (`github`, `postgres`, `playwright`, or any custom command) declared in
+  `team.yaml`.
 - **A full CLI** (`init`, `run`, `ask`, `task`, `status`, `history`, `decisions`,
-  `agents`, `doctor`) plus a built-in `MockRuntime`, so you can try the entire
-  flow with zero AI credentials before pointing it at a real model.
+  `agents`, `mcp`, `doctor`) plus a built-in `MockRuntime`, so you can try the
+  entire flow with zero AI credentials before pointing it at a real model — and
+  a VS Code extension with the same views and commands inside the editor.
 
 ## Quick start
 
@@ -181,8 +188,14 @@ call a real model instead of the mock runtime — see
 [docs/architecture.md](docs/architecture.md#why-agentruntime-is-a-core-owned-interface).
 
 Other commands: `crewforge status`, `crewforge history`, `crewforge decisions`,
-`crewforge agents`, `crewforge ask <role> "<question>"`, `crewforge doctor`. Run
-`crewforge --help` for the full list.
+`crewforge agents`, `crewforge mcp`, `crewforge ask <role> "<question>"`,
+`crewforge doctor`. Run `crewforge --help` for the full list.
+
+Prefer working inside the editor? See
+[docs/development.md](docs/development.md#running-the-vs-code-extension) for how
+to run the (not yet published) VS Code extension from this same clone — it has
+Team/Tasks/Changed Files/Decisions views and a real Copilot-backed runtime via
+`vscode.lm`.
 
 ## Configuration
 
@@ -211,6 +224,10 @@ permissions:
   network: restricted
   filesystem: repository
   deployment: approval-required
+
+mcp:
+  servers:
+    - github # shorthand for a known preset (github/postgres/playwright/filesystem)
 ```
 
 See [docs/configuration.md](docs/configuration.md) for the full schema (including
