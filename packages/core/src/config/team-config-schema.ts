@@ -26,8 +26,42 @@ export const verificationConfigSchema = z.object({
   build: z.string().optional(),
 });
 
+/** Shorthand names build.md's examples use (`mcp: servers: [github, postgres, playwright]`),
+ *  resolved to a real launch command for the corresponding official reference server. */
+const KNOWN_MCP_SERVER_PRESETS: Record<string, { command: string; args: string[] }> = {
+  github: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
+  postgres: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'] },
+  playwright: { command: 'npx', args: ['-y', '@playwright/mcp'] },
+  filesystem: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'] },
+};
+
+const mcpServerObjectSchema = z.object({
+  name: z.string().min(1),
+  command: z.string().min(1),
+  args: z.array(z.string()).default([]),
+  env: z.record(z.string(), z.string()).optional(),
+});
+type McpServerObject = z.infer<typeof mcpServerObjectSchema>;
+
+export const mcpServerConfigSchema = z.union([
+  z.string().min(1).transform(resolveMcpServerPreset),
+  mcpServerObjectSchema,
+]);
+
+function resolveMcpServerPreset(name: string, ctx: z.RefinementCtx): McpServerObject {
+  const preset = KNOWN_MCP_SERVER_PRESETS[name];
+  if (!preset) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Unknown MCP server preset "${name}"; provide { name, command, args } explicitly, or use one of: ${Object.keys(KNOWN_MCP_SERVER_PRESETS).join(', ')}.`,
+    });
+    return z.NEVER;
+  }
+  return { name, ...preset };
+}
+
 export const mcpConfigSchema = z.object({
-  servers: z.array(z.string()).default([]),
+  servers: z.array(mcpServerConfigSchema).default([]),
 });
 
 export const teamConfigSchema = z.object({
@@ -60,3 +94,4 @@ export const teamConfigSchema = z.object({
 export type TeamConfig = z.infer<typeof teamConfigSchema>;
 export type WorkflowToggles = z.infer<typeof workflowTogglesSchema>;
 export type VerificationConfigInput = z.infer<typeof verificationConfigSchema>;
+export type MCPServerConfigInput = z.infer<typeof mcpServerConfigSchema>;

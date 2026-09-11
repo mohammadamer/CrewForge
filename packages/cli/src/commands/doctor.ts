@@ -57,6 +57,17 @@ export async function runDoctor(cwd: string): Promise<DoctorReport> {
             : 'not a git repository — run `git init` or disable workflow.worktrees',
         });
       }
+
+      const mcpServers = teamConfig.mcp?.servers ?? [];
+      if (mcpServers.length > 0) {
+        // Not actually connecting here — spawning processes would make `doctor` slow
+        // and network-dependent; `crewforge mcp` does the real connectivity check.
+        checks.push({
+          name: 'MCP servers configured',
+          passed: true,
+          detail: `${mcpServers.map((server) => server.name).join(', ')} — run \`crewforge mcp\` to verify connectivity`,
+        });
+      }
     } catch (error) {
       checks.push({
         name: 'team.yaml valid',

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@crewforge/core": "^0.1.0",
+    "@crewforge/integrations": "^0.1.0",
     "@crewforge/runtime": "^0.1.0",
     "@crewforge/templates": "^0.1.0",
     "chalk": "^6.0.0",

@@ -122,5 +122,12 @@ function renderUserPrompt(request: AgentRequest): string {
     lines.push('', 'Relevant diff:', context.relevantDiff);
   }
 
+  if (context.availableTools && context.availableTools.length > 0) {
+    lines.push('', 'Available MCP tools:');
+    for (const tool of context.availableTools) {
+      lines.push(`- ${tool.server}/${tool.name}${tool.description ? `: ${tool.description}` : ''}`);
+    }
+  }
+
   return lines.join('\n');
 }

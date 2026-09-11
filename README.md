@@ -231,9 +231,13 @@ The MVP described in build.md is implemented and tested end to end:
 - ✅ Real Git integration, verification runner, conflict detection, human approval
 - ✅ Opt-in git worktree isolation for parallel tasks (`workflow.worktrees`), with
   real merge-conflict detection alongside the self-reported-file-list check
+- ✅ MCP support (`mcp.servers` in `team.yaml`, connected via `@crewforge/integrations`'
+  `McpClientProvider`, tools surfaced to agents as `AgentContext.availableTools`;
+  see [docs/architecture.md](docs/architecture.md#mcp-model-context-protocol-support)
+  for what's not wired up yet)
 
-Not yet built (see build.md's later phases): MCP support, a generic declarative
-workflow engine, and the VS Code extension.
+Not yet built (see build.md's later phases): a generic declarative workflow
+engine and the VS Code extension.
 
 ## Documentation
 

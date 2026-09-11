@@ -4,6 +4,7 @@ import type { DependentTaskResult, RepositorySummary } from '../context/types.js
 import { createAgentEvent } from '../events/factory.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { GitProvider } from '../git/types.js';
+import type { MCPProvider, MCPToolDescriptor } from '../mcp/types.js';
 import type { MemoryStore } from '../memory/memory-store.js';
 import type { TaskGraph } from '../tasks/task-graph.js';
 import type { Task, TaskResult } from '../tasks/types.js';
@@ -24,6 +25,8 @@ export interface RuntimeAgentExecutorOptions {
   gitProvider?: GitProvider;
   /** Builds a `GitProvider` scoped to a task's worktree; used instead of `gitProvider` when the task runs isolated. */
   createGitProviderForCwd?: (cwd: string) => GitProvider;
+  /** When provided (and connected), its tools are listed and included in every task's context. */
+  mcpProvider?: MCPProvider;
 }
 
 /**
@@ -56,6 +59,7 @@ export class RuntimeAgentExecutor implements AgentExecutor {
       dependentResults: this.collectDependentResults(task, graph),
       relevantDiff: await this.fetchRelevantDiff(execContext?.cwd),
       workingDirectory: execContext?.cwd,
+      availableTools: await this.fetchAvailableTools(),
     });
 
     try {
@@ -106,6 +110,16 @@ export class RuntimeAgentExecutor implements AgentExecutor {
       .map((depId) => graph.getTask(depId))
       .filter((dep): dep is Task & { result: TaskResult } => dep.result !== undefined)
       .map((dep) => ({ taskId: dep.id, summary: dep.result.summary }));
+  }
+
+  /** Best-effort: an unconfigured/unreachable `MCPProvider` should never fail agent execution. */
+  private async fetchAvailableTools(): Promise<MCPToolDescriptor[] | undefined> {
+    if (!this.options.mcpProvider) return undefined;
+    try {
+      return await this.options.mcpProvider.listTools();
+    } catch {
+      return undefined;
+    }
   }
 
   /** Best-effort: a missing/non-repo `GitProvider` should never fail agent execution. */

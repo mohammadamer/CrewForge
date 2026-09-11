@@ -55,4 +55,40 @@ describe('teamConfigSchema', () => {
     expect(result.permissions.shell).toBe('restricted');
     expect(result.mcp).toBeUndefined();
   });
+
+  it('resolves known mcp server preset names to a launchable command', () => {
+    const result = teamConfigSchema.parse({
+      name: 'demo',
+      agents: ['lead'],
+      mcp: { servers: ['github'] },
+    });
+
+    expect(result.mcp?.servers).toEqual([
+      { name: 'github', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
+    ]);
+  });
+
+  it('accepts an explicit mcp server object alongside preset names', () => {
+    const result = teamConfigSchema.parse({
+      name: 'demo',
+      agents: ['lead'],
+      mcp: {
+        servers: [{ name: 'local-fs', command: 'mcp-server-filesystem', args: ['/repo'] }],
+      },
+    });
+
+    expect(result.mcp?.servers).toEqual([
+      { name: 'local-fs', command: 'mcp-server-filesystem', args: ['/repo'] },
+    ]);
+  });
+
+  it('rejects an unknown mcp server preset name', () => {
+    expect(() =>
+      teamConfigSchema.parse({
+        name: 'demo',
+        agents: ['lead'],
+        mcp: { servers: ['not-a-preset'] },
+      }),
+    ).toThrow(/Unknown MCP server preset/);
+  });
 });

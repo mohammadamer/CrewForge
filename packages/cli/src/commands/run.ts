@@ -2,6 +2,7 @@ import {
   AgentRegistry,
   AiTaskPlanner,
   CommandVerificationRunner,
+  createAgentEvent,
   createTask,
   DefaultContextBuilder,
   DeterministicTaskPlanner,
@@ -32,6 +33,7 @@ import type {
 } from '@crewforge/core';
 import { join } from 'node:path';
 import { agentsDirFor, crewforgeDirFor } from '../paths.js';
+import { connectConfiguredMcpServers } from '../mcp.js';
 
 export interface RunOptions {
   cwd: string;
@@ -63,6 +65,14 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
   const memoryStore = new MemoryStore({ crewforgeDir });
   const gitProvider = new LocalGitProvider({ cwd: options.cwd });
   const createGitProviderForCwd = (cwd: string) => new LocalGitProvider({ cwd });
+  const mcpConnection = await connectConfiguredMcpServers(teamConfig);
+  for (const { server, error } of mcpConnection?.connectionErrors ?? []) {
+    eventBus.publish(
+      createAgentEvent('agent-message', {
+        message: `MCP server "${server}" failed to connect: ${String(error)}`,
+      }),
+    );
+  }
 
   const executor = new RuntimeAgentExecutor({
     runtime: options.runtime,
@@ -73,6 +83,7 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
     memoryStore,
     gitProvider,
     createGitProviderForCwd,
+    mcpProvider: mcpConnection?.provider,
   });
 
   const worktrees = teamConfig.workflow.worktrees
@@ -101,25 +112,30 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
   const leadAgent = registry.has(teamConfig.lead) ? registry.get(teamConfig.lead) : undefined;
 
   const startedAt = Date.now();
-  const summary = await executeRun(options.request, repository, {
-    registry,
-    planner,
-    executor,
-    worktrees,
-    verification: {
-      enabled: teamConfig.workflow.verification,
-      config: teamConfig.verification,
-      runner: new CommandVerificationRunner({ cwd: options.cwd }),
-    },
-    resolveConflict: (conflict, tasks) =>
-      suggestConflictResolution(conflict, tasks, {
-        runtime: options.runtime,
-        leadAgent,
-        contextBuilder,
-        repository,
-        request: options.request,
-      }),
-  });
+  let summary: OrchestrationSummary;
+  try {
+    summary = await executeRun(options.request, repository, {
+      registry,
+      planner,
+      executor,
+      worktrees,
+      verification: {
+        enabled: teamConfig.workflow.verification,
+        config: teamConfig.verification,
+        runner: new CommandVerificationRunner({ cwd: options.cwd }),
+      },
+      resolveConflict: (conflict, tasks) =>
+        suggestConflictResolution(conflict, tasks, {
+          runtime: options.runtime,
+          leadAgent,
+          contextBuilder,
+          repository,
+          request: options.request,
+        }),
+    });
+  } finally {
+    await mcpConnection?.provider.disconnect();
+  }
   const completedAt = Date.now();
 
   const runId = generatePrefixedId('run');

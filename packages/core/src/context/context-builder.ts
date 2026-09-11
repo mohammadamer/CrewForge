@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { AgentDefinition } from '../agents/types.js';
+import type { MCPToolDescriptor } from '../mcp/types.js';
 import type { Task } from '../tasks/types.js';
 import type {
   AgentContext,
@@ -19,6 +20,7 @@ export interface ContextBuildOptions {
   relevantDiff?: string;
   /** Set when the task is running in an isolated git worktree. */
   workingDirectory?: string;
+  availableTools?: MCPToolDescriptor[];
 }
 
 export interface ContextBuilder {
@@ -55,6 +57,7 @@ export class DefaultContextBuilder implements ContextBuilder {
       dependentResults: options.dependentResults ?? [],
       relevantDiff: options.relevantDiff,
       workingDirectory: options.workingDirectory,
+      availableTools: options.availableTools,
     };
   }
 

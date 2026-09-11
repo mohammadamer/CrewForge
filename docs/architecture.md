@@ -7,18 +7,20 @@ pieces in `packages/` relate to each other. For the field-level config reference
 ## Layering
 
 ```
-packages/cli        thin: parses argv, prints output, wires concrete adapters
-packages/runtime    AgentRuntime adapters (MockRuntime, CopilotRuntime)
-packages/templates  built-in agent/workflow reference data (no code)
-packages/core       all business logic (orchestration, tasks, context, git,
-                     verification, permissions, config, memory, events)
+packages/cli          thin: parses argv, prints output, wires concrete adapters
+packages/runtime      AgentRuntime adapters (MockRuntime, CopilotRuntime)
+packages/integrations external-system adapters (MCPProvider today)
+packages/templates    built-in agent/workflow reference data (no code)
+packages/core         all business logic (orchestration, tasks, context, git,
+                       verification, permissions, config, memory, events, mcp)
 ```
 
-`packages/core` never imports from `cli` or `runtime`. It depends only on the
-_interfaces_ it defines itself (`AgentRuntime`, `GitProvider`, `VerificationRunner`,
-`ContextBuilder`, `TaskPlanner`, `AgentExecutor`) — concrete implementations are
-injected by whichever caller wires the system together (today, only the CLI does
-this; a future VS Code extension would wire the same interfaces differently).
+`packages/core` never imports from `cli`, `runtime`, or `integrations`. It depends
+only on the _interfaces_ it defines itself (`AgentRuntime`, `GitProvider`,
+`VerificationRunner`, `ContextBuilder`, `TaskPlanner`, `AgentExecutor`,
+`MCPProvider`) — concrete implementations are injected by whichever caller wires
+the system together (today, only the CLI does this; a future VS Code extension
+would wire the same interfaces differently).
 
 ## The pipeline of a single `run`
 
@@ -170,3 +172,47 @@ flowchart LR
 - `createWorktree()`/`removeWorktree()`/`merge()` are plain `GitProvider` methods
   (`core/git/git-provider.ts`), so any future `GitProvider` implementation gets
   worktree isolation for free by implementing the same three methods.
+
+## MCP (Model Context Protocol) support
+
+`MCPProvider` (`core/mcp/types.ts`) is the interface: `connect()`, `disconnect()`,
+`listTools()`, `callTool(server, tool, args)`. Like `AgentRuntime` and
+`GitProvider`, core only defines the contract — the concrete implementation,
+`McpClientProvider`, lives in `packages/integrations` (the package build.md's
+project structure calls out for external-system adapters) and is built on the
+official `@modelcontextprotocol/sdk`, not a hand-rolled protocol implementation.
+
+```
+team.yaml: mcp.servers  -->  McpClientProvider.connect()  -->  per-server stdio
+   (name/command/args,          (one child process each,        child process
+    or a preset shorthand)       failures isolated per server)   running the
+                                                                  actual MCP server
+```
+
+- **Config**: `mcp.servers` entries are either a full `{ name, command, args, env }`
+  launch spec, or a bare string that must match a small built-in preset table
+  (`github`, `postgres`, `playwright`, `filesystem` — resolved to the matching
+  official `@modelcontextprotocol/server-*` package via `npx`). Validated by
+  `mcpServerConfigSchema` in `team-config-schema.ts`.
+- **Connecting**: `connectConfiguredMcpServers()` (`packages/cli/src/mcp.ts`)
+  builds one `McpClientProvider` for all configured servers and connects to each
+  over stdio. A single server failing to start (not installed, bad command, ...)
+  is reported through `onConnectionError` and never blocks the others or the run
+  — CrewForge surfaces it as an `agent-message` event instead of failing.
+- **Reaching agents**: `crewforge run` passes the connected provider into
+  `RuntimeAgentExecutor`, which calls `listTools()` best-effort per task (same
+  "never fail the run" treatment as the git diff lookup) and adds the results to
+  `AgentContext.availableTools`. `CopilotRuntime`'s prompt renderer lists them
+  under "Available MCP tools" so the model at least knows what exists.
+- **What's not built yet**: agents don't have a tool-calling loop today (every
+  runtime is still single-shot request/response — see
+  [Why `AgentRuntime` is a core-owned interface](#why-agentruntime-is-a-core-owned-interface)),
+  so `MCPProvider.callTool()` is exercised by tests and by `crewforge mcp` (which
+  connects, lists tools, and disconnects, to verify connectivity) but not yet
+  invoked automatically mid-run. Wiring an actual tool-use loop into
+  `RuntimeAgentExecutor` is a natural next step once a runtime supports it.
+- **Testing without spawning processes**: `McpClientProvider` accepts an
+  injectable `createTransport()`, which the test suite uses with the SDK's
+  `InMemoryTransport` to talk to a real in-process `McpServer` — so the tests
+  prove the adapter speaks the actual MCP protocol without needing a real
+  subprocess or network access in CI.

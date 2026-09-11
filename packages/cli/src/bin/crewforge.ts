@@ -13,6 +13,7 @@ import { runDoctor } from '../commands/doctor.js';
 import { runTaskCreate } from '../commands/task.js';
 import { runAsk } from '../commands/ask.js';
 import { approveRun, runRun } from '../commands/run.js';
+import { runMcpList } from '../commands/mcp.js';
 import { renderEvent } from '../ui/render-event.js';
 import { confirm } from '../ui/prompt.js';
 import { resolveRuntime } from '../runtime-selection.js';
@@ -62,6 +63,26 @@ agents
   .action(async (role: string, opts: { force?: boolean }) => {
     const path = await runAgentCreate({ cwd: process.cwd(), role, force: opts.force });
     console.log(chalk.green(`Created ${path}`));
+  });
+
+program
+  .command('mcp')
+  .description('Connect to configured MCP servers and list the tools they expose')
+  .action(async () => {
+    const result = await runMcpList(process.cwd());
+    if (result.configuredServers.length === 0) {
+      console.log(chalk.dim('No MCP servers configured — set mcp.servers in team.yaml.'));
+      return;
+    }
+    for (const { server, error } of result.connectionErrors) {
+      console.log(`${chalk.red('✗')} ${server}: ${error}`);
+    }
+    for (const tool of result.tools) {
+      console.log(
+        `${chalk.green('✓')} ${chalk.bold(`${tool.server}/${tool.name}`)}` +
+          (tool.description ? ` ${chalk.dim(tool.description)}` : ''),
+      );
+    }
   });
 
 program
