@@ -1,0 +1,28 @@
+{
+  "name": "@crewforge/cli",
+  "version": "0.1.0",
+  "description": "The crewforge command-line interface: a repo-native AI engineering team.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "crewforge": "./dist/bin/crewforge.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@crewforge/core": "^0.1.0",
+    "@crewforge/runtime": "^0.1.0",
+    "@crewforge/templates": "^0.1.0",
+    "chalk": "^6.0.0",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2"
+  }
+}
