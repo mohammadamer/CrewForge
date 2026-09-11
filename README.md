@@ -96,15 +96,53 @@ Human decides → Lead coordinates → Specialists execute → Agents verify →
 
 <!-- TODO: replace with a recorded demo GIF/asciinema cast once the CLI is published. -->
 
+## What you get
+
+Running CrewForge against a project gives you:
+
+- **A `.crewforge/` folder scaffolded into your repo** — team config, agent
+  definitions, a knowledge base, an ADR log, task graph state, and session
+  history. All plain Markdown/YAML/JSON, readable and diffable in git — nothing
+  important lives only in a database.
+- **A Lead agent that plans your request** — turns a plain-English task into a
+  dependency-aware task graph, assigns each piece to Backend/Frontend/QA (or
+  whichever agents you've configured), and runs independent branches in parallel.
+- **Real Git awareness** — each agent's context includes the relevant diff, and
+  if two agents touch the same files, CrewForge halts auto-merging and flags a
+  conflict instead of silently discarding work.
+- **Automatic verification** — your repo's own `test`/`lint`/`build` commands run
+  after implementation; a failure demotes the run to `needs-review` and blocks
+  approval.
+- **A human approval gate on every run** — nothing is final until you approve
+  it; you can also reject, retry, or ask for changes.
+- **A full CLI** (`init`, `run`, `ask`, `task`, `status`, `history`, `decisions`,
+  `agents`, `doctor`) plus a built-in `MockRuntime`, so you can try the entire
+  flow with zero AI credentials before pointing it at a real model.
+
 ## Quick start
 
-```bash
-npm install -g @crewforge/cli   # or: npx @crewforge/cli <command>
+CrewForge isn't published to npm yet, so run it straight from a clone of this
+repo. This repo _is_ the tool — you point its CLI at whichever project you want
+the crew to work on.
 
-cd your-project
-crewforge init                  # scaffolds .crewforge/ with Lead + Backend + Frontend + QA
+```bash
+git clone https://github.com/mohammadamer/CrewForge.git
+cd CrewForge
+npm install
+npm run build
+npm link --workspace packages/cli   # puts `crewforge` on your PATH, backed by this build
+```
+
+Then, from the project you actually want to work on (a separate git repo):
+
+```bash
+cd ~/projects/your-project
+crewforge init                       # scaffolds .crewforge/ with Lead + Backend + Frontend + QA
 crewforge run "Add a health check endpoint"
 ```
+
+No permissions to `npm link` globally? Call the build directly instead:
+`node /path/to/CrewForge/packages/cli/dist/bin/crewforge.js init`.
 
 Real output from `crewforge init` followed by `crewforge run` (using the built-in
 `MockRuntime`, so this works with zero AI credentials configured):
