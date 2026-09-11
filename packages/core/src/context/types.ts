@@ -1,4 +1,5 @@
 import type { AgentDefinition } from '../agents/types.js';
+import type { MCPToolDescriptor } from '../mcp/types.js';
 import type { Task } from '../tasks/types.js';
 
 export interface RepositorySummary {
@@ -49,4 +50,8 @@ export interface AgentContext {
   dependentResults: DependentTaskResult[];
   /** Populated by `RuntimeAgentExecutor` from `GitProvider.diff()` when one is configured. */
   relevantDiff?: string;
+  /** Set when the task runs in an isolated git worktree rather than the main working tree. */
+  workingDirectory?: string;
+  /** Tools available from configured MCP servers, when any are connected (`team.yaml`'s `mcp.servers`). */
+  availableTools?: MCPToolDescriptor[];
 }

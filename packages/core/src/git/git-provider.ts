@@ -1,9 +1,23 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { NotImplementedError } from '../shared/errors.js';
-import type { GitDiffResult, GitProvider, GitStatus, GitStatusEntry } from './types.js';
+import type {
+  GitDiffResult,
+  GitProvider,
+  GitStatus,
+  GitStatusEntry,
+  MergeResult,
+} from './types.js';
 
 const execFileAsync = promisify(execFile);
+
+interface ExecFileError {
+  stdout?: string;
+  stderr?: string;
+}
+
+function isExecFileError(error: unknown): error is ExecFileError {
+  return typeof error === 'object' && error !== null && ('stdout' in error || 'stderr' in error);
+}
 
 export interface LocalGitProviderOptions {
   cwd: string;
@@ -34,10 +48,12 @@ export class LocalGitProvider implements GitProvider {
     await this.git(['checkout', '-b', name]);
   }
 
-  async createWorktree(): Promise<void> {
-    throw new NotImplementedError(
-      'Git worktree-isolated parallel execution is planned for a later phase',
-    );
+  async createWorktree(path: string, branch: string): Promise<void> {
+    await this.git(['worktree', 'add', '-b', branch, path]);
+  }
+
+  async removeWorktree(path: string): Promise<void> {
+    await this.git(['worktree', 'remove', '--force', path]);
   }
 
   async commit(message: string, paths?: string[]): Promise<string> {
@@ -46,8 +62,17 @@ export class LocalGitProvider implements GitProvider {
     return (await this.git(['rev-parse', 'HEAD'])).trim();
   }
 
-  async merge(branch: string): Promise<void> {
-    await this.git(['merge', branch]);
+  async merge(branch: string): Promise<MergeResult> {
+    try {
+      const output = await this.git(['merge', '--no-edit', branch]);
+      return { merged: true, conflicted: false, output };
+    } catch (error) {
+      // A real conflict is the only failure we treat as recoverable — abort and report it
+      // rather than leaving the tree in a conflicted state for the caller to clean up.
+      const output = isExecFileError(error) ? (error.stdout ?? '') + (error.stderr ?? '') : '';
+      await this.git(['merge', '--abort']).catch(() => undefined);
+      return { merged: false, conflicted: true, output: output || String(error) };
+    }
   }
 
   private async git(args: string[]): Promise<string> {

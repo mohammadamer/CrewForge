@@ -12,5 +12,6 @@ export * from './commands/doctor.js';
 export * from './commands/task.js';
 export * from './commands/ask.js';
 export * from './commands/run.js';
+export * from './commands/mcp.js';
 export * from './ui/render-event.js';
 export * from './ui/prompt.js';

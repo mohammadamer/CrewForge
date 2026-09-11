@@ -14,13 +14,24 @@ export interface GitDiffResult {
   patch: string;
 }
 
+export interface MergeResult {
+  /** True when `branch` is now incorporated (including a trivial "already up to date"). */
+  merged: boolean;
+  /** True when the merge was aborted due to a real conflict; the tree is left clean. */
+  conflicted: boolean;
+  output: string;
+}
+
 /** Abstraction over Git so orchestration never shells out directly. See `LocalGitProvider`. */
 export interface GitProvider {
   status(): Promise<GitStatus>;
   diff(paths?: string[]): Promise<GitDiffResult>;
   createBranch(name: string): Promise<void>;
-  /** Isolated worktrees for parallel task execution; out of scope until Phase 6. */
+  /** Creates an isolated worktree at `path` on a new `branch`, for parallel task execution. */
   createWorktree(path: string, branch: string): Promise<void>;
+  /** Removes a worktree previously created by `createWorktree`. */
+  removeWorktree(path: string): Promise<void>;
   commit(message: string, paths?: string[]): Promise<string>;
-  merge(branch: string): Promise<void>;
+  /** Merges `branch` into the current branch; aborts (never leaves a conflicted tree) on conflict. */
+  merge(branch: string): Promise<MergeResult>;
 }

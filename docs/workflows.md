@@ -53,6 +53,13 @@ limit; `team.yaml`'s `workflow.parallel_execution: false` would need the planner
 stop branching (not yet wired — today the planner always produces the parallel
 shape when both roles are present).
 
+Optionally, `workflow.worktrees: true` gives each of those concurrently-running
+tasks its own isolated git worktree instead of sharing the main working tree, with
+real git-level merge-conflict detection layered on top of `lead.integrate`'s
+self-reported-file-list check. See
+[architecture.md#parallel-execution-and-worktree-isolation](architecture.md#parallel-execution-and-worktree-isolation)
+for how that fits into the pipeline.
+
 ## What a future declarative engine would need
 
 - Parse `workflows:` from `team.yaml` into `Workflow`/`WorkflowStep` values (the

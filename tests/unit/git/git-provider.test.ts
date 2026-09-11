@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LocalGitProvider, NotImplementedError } from '@crewforge/core';
+import { LocalGitProvider } from '@crewforge/core';
 
 const execFileAsync = promisify(execFile);
 
@@ -77,11 +77,77 @@ describe('LocalGitProvider', () => {
     expect(status.branch).toBe('feature/x');
   });
 
-  it('createWorktree() is not yet implemented (deferred to a later phase)', async () => {
+  it('createWorktree() creates an isolated checkout on a new branch', async () => {
     const provider = new LocalGitProvider({ cwd: repoRoot });
-    await expect(provider.createWorktree('../wt', 'feature/x')).rejects.toThrow(
-      NotImplementedError,
-    );
+    const worktreePath = join(repoRoot, '..', 'crewforge-wt-basic');
+
+    try {
+      await provider.createWorktree(worktreePath, 'feature/x');
+      const worktreeProvider = new LocalGitProvider({ cwd: worktreePath });
+      const status = await worktreeProvider.status();
+      expect(status.branch).toBe('feature/x');
+
+      // The main repo's own checkout is untouched by creating the worktree.
+      expect((await provider.status()).branch).toBe('main');
+    } finally {
+      await rm(worktreePath, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
+
+  it('removeWorktree() cleans up a previously created worktree', async () => {
+    const provider = new LocalGitProvider({ cwd: repoRoot });
+    const worktreePath = join(repoRoot, '..', 'crewforge-wt-remove');
+
+    await provider.createWorktree(worktreePath, 'feature/remove-me');
+    await provider.removeWorktree(worktreePath);
+
+    const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repoRoot,
+    });
+    expect(stdout).not.toContain('crewforge-wt-remove');
+  });
+
+  it('merge() cleanly merges a worktree branch\u2019s commit into the current branch', async () => {
+    const provider = new LocalGitProvider({ cwd: repoRoot });
+    const worktreePath = join(repoRoot, '..', 'crewforge-wt-merge');
+
+    try {
+      await provider.createWorktree(worktreePath, 'feature/merge-me');
+      await writeFile(join(worktreePath, 'FEATURE.md'), '# feature\n');
+      await new LocalGitProvider({ cwd: worktreePath }).commit('add feature file');
+
+      const result = await provider.merge('feature/merge-me');
+
+      expect(result.merged).toBe(true);
+      expect(result.conflicted).toBe(false);
+      expect((await provider.status()).entries).toEqual([]);
+    } finally {
+      await provider.removeWorktree(worktreePath).catch(() => undefined);
+    }
+  });
+
+  it('merge() aborts and reports conflicted:true on a real conflict, leaving a clean tree', async () => {
+    const provider = new LocalGitProvider({ cwd: repoRoot });
+    const worktreePath = join(repoRoot, '..', 'crewforge-wt-conflict');
+
+    try {
+      await provider.createWorktree(worktreePath, 'feature/conflict-me');
+      await writeFile(join(worktreePath, 'README.md'), '# from worktree\n');
+      await new LocalGitProvider({ cwd: worktreePath }).commit('conflicting change');
+
+      // Diverge the main branch's copy of the same file/line so the merge cannot be trivial.
+      await writeFile(join(repoRoot, 'README.md'), '# from main\n');
+      await provider.commit('diverging change');
+
+      const result = await provider.merge('feature/conflict-me');
+
+      expect(result.merged).toBe(false);
+      expect(result.conflicted).toBe(true);
+      // The merge was aborted, so the tree must be clean again (no MERGE_HEAD/conflict markers).
+      expect((await provider.status()).clean).toBe(true);
+    } finally {
+      await provider.removeWorktree(worktreePath).catch(() => undefined);
+    }
   });
 });
 

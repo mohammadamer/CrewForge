@@ -8,7 +8,7 @@ import type { Task } from '../tasks/types.js';
 import { detectConflicts } from './conflict-detector.js';
 import type { ConflictGroup } from './conflict-detector.js';
 import { LeadAgent } from './lead-agent.js';
-import type { LeadAgentOptions, RunSummary } from './lead-agent.js';
+import type { LeadAgentOptions, RunSummary, WorktreeConflict } from './lead-agent.js';
 
 export interface ResolvedConflict extends ConflictGroup {
   suggestedResolution?: string;
@@ -31,6 +31,8 @@ export interface OrchestrationSummary extends RunSummary {
   conflicts: ResolvedConflict[];
   verification?: VerificationSummary;
 }
+
+export type { WorktreeConflict };
 
 /**
  * Wraps `LeadAgent.run()` with the two post-implementation stages build.md calls out
@@ -55,6 +57,7 @@ export async function executeRun(
     completed: tasks.filter((task) => task.status === 'completed' || task.status === 'approved'),
     failed: tasks.filter((task) => task.status === 'failed'),
     needsReview: tasks.filter((task) => task.status === 'needs-review'),
+    worktreeConflicts: summary.worktreeConflicts,
     conflicts,
     verification,
   };

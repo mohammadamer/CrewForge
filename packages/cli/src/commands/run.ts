@@ -2,6 +2,7 @@ import {
   AgentRegistry,
   AiTaskPlanner,
   CommandVerificationRunner,
+  createAgentEvent,
   createTask,
   DefaultContextBuilder,
   DeterministicTaskPlanner,
@@ -12,9 +13,12 @@ import {
   LocalGitProvider,
   loadTeamConfig,
   MemoryStore,
+  pathExists,
   RuntimeAgentExecutor,
   SessionStore,
   TaskStore,
+  ValidationError,
+  WorktreeCoordinator,
 } from '@crewforge/core';
 import type {
   AgentDefinition,
@@ -27,7 +31,9 @@ import type {
   SessionSummary,
   Task,
 } from '@crewforge/core';
+import { join } from 'node:path';
 import { agentsDirFor, crewforgeDirFor } from '../paths.js';
+import { connectConfiguredMcpServers } from '../mcp.js';
 
 export interface RunOptions {
   cwd: string;
@@ -58,6 +64,15 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
   const contextBuilder = new DefaultContextBuilder();
   const memoryStore = new MemoryStore({ crewforgeDir });
   const gitProvider = new LocalGitProvider({ cwd: options.cwd });
+  const createGitProviderForCwd = (cwd: string) => new LocalGitProvider({ cwd });
+  const mcpConnection = await connectConfiguredMcpServers(teamConfig);
+  for (const { server, error } of mcpConnection?.connectionErrors ?? []) {
+    eventBus.publish(
+      createAgentEvent('agent-message', {
+        message: `MCP server "${server}" failed to connect: ${String(error)}`,
+      }),
+    );
+  }
 
   const executor = new RuntimeAgentExecutor({
     runtime: options.runtime,
@@ -67,7 +82,23 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
     eventBus,
     memoryStore,
     gitProvider,
+    createGitProviderForCwd,
+    mcpProvider: mcpConnection?.provider,
   });
+
+  const worktrees = teamConfig.workflow.worktrees
+    ? new WorktreeCoordinator({
+        gitProvider,
+        createGitProvider: createGitProviderForCwd,
+        worktreesDir: join(crewforgeDir, 'worktrees'),
+      })
+    : undefined;
+
+  if (teamConfig.workflow.worktrees && !(await pathExists(join(options.cwd, '.git')))) {
+    throw new ValidationError(
+      'workflow.worktrees is enabled but this is not a git repository — run `git init` first or set workflow.worktrees: false in team.yaml.',
+    );
+  }
 
   const planner = registry.has(teamConfig.lead)
     ? new AiTaskPlanner({
@@ -81,24 +112,30 @@ export async function runRun(options: RunOptions): Promise<RunOutcome> {
   const leadAgent = registry.has(teamConfig.lead) ? registry.get(teamConfig.lead) : undefined;
 
   const startedAt = Date.now();
-  const summary = await executeRun(options.request, repository, {
-    registry,
-    planner,
-    executor,
-    verification: {
-      enabled: teamConfig.workflow.verification,
-      config: teamConfig.verification,
-      runner: new CommandVerificationRunner({ cwd: options.cwd }),
-    },
-    resolveConflict: (conflict, tasks) =>
-      suggestConflictResolution(conflict, tasks, {
-        runtime: options.runtime,
-        leadAgent,
-        contextBuilder,
-        repository,
-        request: options.request,
-      }),
-  });
+  let summary: OrchestrationSummary;
+  try {
+    summary = await executeRun(options.request, repository, {
+      registry,
+      planner,
+      executor,
+      worktrees,
+      verification: {
+        enabled: teamConfig.workflow.verification,
+        config: teamConfig.verification,
+        runner: new CommandVerificationRunner({ cwd: options.cwd }),
+      },
+      resolveConflict: (conflict, tasks) =>
+        suggestConflictResolution(conflict, tasks, {
+          runtime: options.runtime,
+          leadAgent,
+          contextBuilder,
+          repository,
+          request: options.request,
+        }),
+    });
+  } finally {
+    await mcpConnection?.provider.disconnect();
+  }
   const completedAt = Date.now();
 
   const runId = generatePrefixedId('run');
@@ -202,6 +239,7 @@ function buildSessionSummary(
     tasksFailed: tasks.filter((task) => task.status === 'failed').length,
     tasksNeedsReview: tasks.filter((task) => task.status === 'needs-review').length,
     conflicts: summary.conflicts,
+    worktreeConflicts: summary.worktreeConflicts,
     verification: summary.verification,
   };
 }

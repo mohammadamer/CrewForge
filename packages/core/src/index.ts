@@ -8,6 +8,7 @@ export * from './workflows/index.js';
 export * from './permissions/index.js';
 export * from './verification/index.js';
 export * from './git/index.js';
+export * from './mcp/index.js';
 export * from './config/index.js';
 export * from './orchestration/index.js';
 export * from './sessions/index.js';

@@ -4,10 +4,11 @@ import type { DependentTaskResult, RepositorySummary } from '../context/types.js
 import { createAgentEvent } from '../events/factory.js';
 import type { EventBus } from '../events/event-bus.js';
 import type { GitProvider } from '../git/types.js';
+import type { MCPProvider, MCPToolDescriptor } from '../mcp/types.js';
 import type { MemoryStore } from '../memory/memory-store.js';
 import type { TaskGraph } from '../tasks/task-graph.js';
 import type { Task, TaskResult } from '../tasks/types.js';
-import type { AgentExecutor } from './agent-executor.js';
+import type { AgentExecutionContext, AgentExecutor } from './agent-executor.js';
 
 /** Diffs beyond this size are truncated before being sent to an agent as context. */
 const MAX_DIFF_CHARS = 4000;
@@ -22,6 +23,10 @@ export interface RuntimeAgentExecutorOptions {
   memoryStore?: MemoryStore;
   /** When provided, the current working-tree diff is included in each task's context. */
   gitProvider?: GitProvider;
+  /** Builds a `GitProvider` scoped to a task's worktree; used instead of `gitProvider` when the task runs isolated. */
+  createGitProviderForCwd?: (cwd: string) => GitProvider;
+  /** When provided (and connected), its tools are listed and included in every task's context. */
+  mcpProvider?: MCPProvider;
 }
 
 /**
@@ -33,7 +38,12 @@ export interface RuntimeAgentExecutorOptions {
 export class RuntimeAgentExecutor implements AgentExecutor {
   constructor(private readonly options: RuntimeAgentExecutorOptions) {}
 
-  async execute(task: Task, agent: AgentDefinition, graph: TaskGraph): Promise<AgentResult> {
+  async execute(
+    task: Task,
+    agent: AgentDefinition,
+    graph: TaskGraph,
+    execContext?: AgentExecutionContext,
+  ): Promise<AgentResult> {
     const { runtime, contextBuilder, repository, request, eventBus, memoryStore } = this.options;
 
     eventBus?.publish(
@@ -47,7 +57,9 @@ export class RuntimeAgentExecutor implements AgentExecutor {
     const context = await contextBuilder.build(task, agent, repository, {
       request,
       dependentResults: this.collectDependentResults(task, graph),
-      relevantDiff: await this.fetchRelevantDiff(),
+      relevantDiff: await this.fetchRelevantDiff(execContext?.cwd),
+      workingDirectory: execContext?.cwd,
+      availableTools: await this.fetchAvailableTools(),
     });
 
     try {
@@ -100,11 +112,25 @@ export class RuntimeAgentExecutor implements AgentExecutor {
       .map((dep) => ({ taskId: dep.id, summary: dep.result.summary }));
   }
 
-  /** Best-effort: a missing/non-repo `GitProvider` should never fail agent execution. */
-  private async fetchRelevantDiff(): Promise<string | undefined> {
-    if (!this.options.gitProvider) return undefined;
+  /** Best-effort: an unconfigured/unreachable `MCPProvider` should never fail agent execution. */
+  private async fetchAvailableTools(): Promise<MCPToolDescriptor[] | undefined> {
+    if (!this.options.mcpProvider) return undefined;
     try {
-      const { patch } = await this.options.gitProvider.diff();
+      return await this.options.mcpProvider.listTools();
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Best-effort: a missing/non-repo `GitProvider` should never fail agent execution. */
+  private async fetchRelevantDiff(cwd?: string): Promise<string | undefined> {
+    const gitProvider =
+      cwd && this.options.createGitProviderForCwd
+        ? this.options.createGitProviderForCwd(cwd)
+        : this.options.gitProvider;
+    if (!gitProvider) return undefined;
+    try {
+      const { patch } = await gitProvider.diff();
       if (!patch) return undefined;
       return patch.length > MAX_DIFF_CHARS
         ? `${patch.slice(0, MAX_DIFF_CHARS)}\n… (truncated)`

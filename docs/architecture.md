@@ -7,18 +7,20 @@ pieces in `packages/` relate to each other. For the field-level config reference
 ## Layering
 
 ```
-packages/cli        thin: parses argv, prints output, wires concrete adapters
-packages/runtime    AgentRuntime adapters (MockRuntime, CopilotRuntime)
-packages/templates  built-in agent/workflow reference data (no code)
-packages/core       all business logic (orchestration, tasks, context, git,
-                     verification, permissions, config, memory, events)
+packages/cli          thin: parses argv, prints output, wires concrete adapters
+packages/runtime      AgentRuntime adapters (MockRuntime, CopilotRuntime)
+packages/integrations external-system adapters (MCPProvider today)
+packages/templates    built-in agent/workflow reference data (no code)
+packages/core         all business logic (orchestration, tasks, context, git,
+                       verification, permissions, config, memory, events, mcp)
 ```
 
-`packages/core` never imports from `cli` or `runtime`. It depends only on the
-_interfaces_ it defines itself (`AgentRuntime`, `GitProvider`, `VerificationRunner`,
-`ContextBuilder`, `TaskPlanner`, `AgentExecutor`) — concrete implementations are
-injected by whichever caller wires the system together (today, only the CLI does
-this; a future VS Code extension would wire the same interfaces differently).
+`packages/core` never imports from `cli`, `runtime`, or `integrations`. It depends
+only on the _interfaces_ it defines itself (`AgentRuntime`, `GitProvider`,
+`VerificationRunner`, `ContextBuilder`, `TaskPlanner`, `AgentExecutor`,
+`MCPProvider`) — concrete implementations are injected by whichever caller wires
+the system together (today, only the CLI does this; a future VS Code extension
+would wire the same interfaces differently).
 
 ## The pipeline of a single `run`
 
@@ -47,7 +49,9 @@ flowchart TD
    ready tasks and runs each ready batch concurrently (bounded), advancing the
    graph as results come back — this is where "backend and frontend run in
    parallel, but integration/QA wait" comes from, without any task needing to know
-   about scheduling itself.
+   about scheduling itself. When `workflow.worktrees` is enabled, `LeadAgent` also
+   gives each task its own isolated git worktree for this step — see
+   [Parallel execution and worktree isolation](#parallel-execution-and-worktree-isolation).
 4. **`AgentExecutor`** (`core/orchestration/runtime-agent-executor.ts`) is called
    once per task. It builds that task's `AgentContext` via `ContextBuilder`
    (knowledge files, dependent-task results, prior decisions, and — when a
@@ -118,3 +122,97 @@ specifies) and provides the two adapters:
 Keeping the interface in `core` means core never depends on `packages/runtime` (no
 import cycle), and a future runtime package can implement the same interface
 without core changing at all.
+
+## Parallel execution and worktree isolation
+
+By default, parallel tasks (e.g. backend and frontend running at the same time)
+all execute against the same working tree. `AgentExecutor` implementations today
+never actually write files to disk themselves — `filesChanged` is self-reported by
+the agent/runtime — so this is safe, and `ConflictDetector` (above) catches
+overlapping self-reported file lists after the fact.
+
+Setting `workflow.worktrees: true` in `team.yaml` turns on real, git-level
+isolation for the future where agents _do_ write files directly, and is fully
+functional today:
+
+```mermaid
+flowchart LR
+    P[LeadAgent.runTask] --> W1[WorktreeCoordinator.prepare]
+    W1 -->|git worktree add\n.crewforge/worktrees/task-&lt;id&gt;| X[AgentExecutor.execute\ncwd = worktree path]
+    X --> W2[WorktreeCoordinator.finalize]
+    W2 -->|commit if dirty, then\ngit merge task branch| M{merge result}
+    M -->|clean| C[task: completed]
+    M -->|conflict: git merge --abort| R[task: needs-review]
+```
+
+- **`WorktreeCoordinator`** (`core/git/worktree-coordinator.ts`) is the component
+  `LeadAgent` delegates to when `worktrees` is configured. `prepare(taskId)` runs
+  `git worktree add -b crewforge/task-<id> .crewforge/worktrees/task-<id>` from the
+  main repo and hands the task's `AgentExecutor.execute()` call a `cwd` scoped to
+  that directory (surfaced to agents as `AgentContext.workingDirectory`, and used
+  to scope that task's own relevant-diff lookup). `finalize()` commits anything
+  left in the worktree, merges its branch back into the main checkout, and always
+  removes the worktree afterward — even on a conflict.
+- **Real conflicts, not just self-reported ones**: if the merge fails,
+  `LocalGitProvider.merge()` runs `git merge --abort` (never leaves a repo in a
+  conflicted state) and reports `conflicted: true`. `LeadAgent` demotes that task
+  to `needs-review` and records a `WorktreeConflict { taskId, branch, output }` on
+  the run summary — a second, git-grounded conflict signal alongside
+  `ConflictDetector`'s self-reported-file-list heuristic.
+- **Serialized merges, parallel execution**: `git worktree add`/`merge` mutate
+  the _shared_ repository (refs, index, worktree metadata), so concurrent calls
+  from two tasks racing to merge at once could corrupt or lock each other out.
+  `WorktreeCoordinator` serializes `prepare()`/`finalize()` through an internal
+  FIFO queue — but a task's actual `AgentExecutor.execute()` call, which happens
+  _between_ those two calls, still runs fully in parallel with other tasks. Only
+  the quick "join the shared repo" moments are serialized.
+- **Requires a real git repository**: `crewforge run` checks for `.git` up front
+  and raises a clear `ValidationError` if `workflow.worktrees` is enabled outside
+  one, rather than letting `git worktree add` fail with a raw stderr dump.
+- `createWorktree()`/`removeWorktree()`/`merge()` are plain `GitProvider` methods
+  (`core/git/git-provider.ts`), so any future `GitProvider` implementation gets
+  worktree isolation for free by implementing the same three methods.
+
+## MCP (Model Context Protocol) support
+
+`MCPProvider` (`core/mcp/types.ts`) is the interface: `connect()`, `disconnect()`,
+`listTools()`, `callTool(server, tool, args)`. Like `AgentRuntime` and
+`GitProvider`, core only defines the contract — the concrete implementation,
+`McpClientProvider`, lives in `packages/integrations` (the package build.md's
+project structure calls out for external-system adapters) and is built on the
+official `@modelcontextprotocol/sdk`, not a hand-rolled protocol implementation.
+
+```
+team.yaml: mcp.servers  -->  McpClientProvider.connect()  -->  per-server stdio
+   (name/command/args,          (one child process each,        child process
+    or a preset shorthand)       failures isolated per server)   running the
+                                                                  actual MCP server
+```
+
+- **Config**: `mcp.servers` entries are either a full `{ name, command, args, env }`
+  launch spec, or a bare string that must match a small built-in preset table
+  (`github`, `postgres`, `playwright`, `filesystem` — resolved to the matching
+  official `@modelcontextprotocol/server-*` package via `npx`). Validated by
+  `mcpServerConfigSchema` in `team-config-schema.ts`.
+- **Connecting**: `connectConfiguredMcpServers()` (`packages/cli/src/mcp.ts`)
+  builds one `McpClientProvider` for all configured servers and connects to each
+  over stdio. A single server failing to start (not installed, bad command, ...)
+  is reported through `onConnectionError` and never blocks the others or the run
+  — CrewForge surfaces it as an `agent-message` event instead of failing.
+- **Reaching agents**: `crewforge run` passes the connected provider into
+  `RuntimeAgentExecutor`, which calls `listTools()` best-effort per task (same
+  "never fail the run" treatment as the git diff lookup) and adds the results to
+  `AgentContext.availableTools`. `CopilotRuntime`'s prompt renderer lists them
+  under "Available MCP tools" so the model at least knows what exists.
+- **What's not built yet**: agents don't have a tool-calling loop today (every
+  runtime is still single-shot request/response — see
+  [Why `AgentRuntime` is a core-owned interface](#why-agentruntime-is-a-core-owned-interface)),
+  so `MCPProvider.callTool()` is exercised by tests and by `crewforge mcp` (which
+  connects, lists tools, and disconnects, to verify connectivity) but not yet
+  invoked automatically mid-run. Wiring an actual tool-use loop into
+  `RuntimeAgentExecutor` is a natural next step once a runtime supports it.
+- **Testing without spawning processes**: `McpClientProvider` accepts an
+  injectable `createTransport()`, which the test suite uses with the SDK's
+  `InMemoryTransport` to talk to a real in-process `McpServer` — so the tests
+  prove the adapter speaks the actual MCP protocol without needing a real
+  subprocess or network access in CI.
